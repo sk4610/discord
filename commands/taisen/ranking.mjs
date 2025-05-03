@@ -1,0 +1,80 @@
+import { SlashCommandBuilder } from 'discord.js';
+import { User } from '../taisen/game.js';
+import { getArmyName } from '../kaikyu/kaikyu.mjs';
+
+
+export const data = new SlashCommandBuilder()
+  .setName('ranking')
+  .setDescription('各軍の戦歴上位を公表します');
+
+export async function execute(interaction) {
+  try {
+    const { guild } = interaction; // サーバー情報を取得
+    
+    // A軍の上位3名を取得
+    const topA = await User.findAll({
+      where: { army: 'A' },
+      order: [['total_kills', 'DESC']],
+      limit: 3
+    });
+
+    // B軍の上位3名を取得
+    const topB = await User.findAll({
+      where: { army: 'B' },
+      order: [['total_kills', 'DESC']],
+      limit: 3
+    });
+
+     // ユーザーIDからサーバーニックネームを取得
+    async function getUsername(guild, userId) {
+      try {
+        const member = await guild.members.fetch(userId);
+        return member.displayName; // サーバーニックネームを取得
+      } catch (error) {
+        console.error(`ユーザー取得エラー: ${userId}`, error);
+        return '不明なユーザー'; // 取得に失敗した場合のデフォルト
+      }
+    }
+
+    //アクティブ兵士数のカウント
+    const uniquePlayersA = await User.count({ where: { army: 'A' } });
+    const uniquePlayersB = await User.count({ where: { army: 'B' } });
+    const totalUniquePlayers = uniquePlayersA + uniquePlayersB;
+    
+    // **レス（行動回数）の取得**
+    const totalActionsA = await User.sum('gekiha_counts', { where: { army: 'A' } }) || 0;
+    const totalActionsB = await User.sum('gekiha_counts', { where: { army: 'B' } }) || 0;
+    const totalActions = totalActionsA + totalActionsB;
+    
+    // A軍とB軍の名前を取得
+    const armyNameA = getArmyName('A');
+    const armyNameB = getArmyName('B');
+    
+    // ランキング表示用のメッセージを作成
+    let message = '🏆 **戦績ランキング (上位3名)** 🏆\n\n';
+    // A軍（きのこ）表示
+    message += `:yellow_circle:  **${armyNameA}:**\n`;
+    for (const player of topA) {
+      const username = await getUsername(guild, player.id);
+      message += `**${username}**（${player.rank}） - ${player.total_kills} 撃破\n`;
+    }
+    // B軍（たけのこ）表示
+    message += `\n:green_circle:  **${armyNameB}:**\n`;
+    for (const player of topB) {
+      const username = await getUsername(guild, player.id);
+      message += `**${username}**（${player.rank}） - ${player.total_kills} 撃破\n`;
+    }
+    
+    // **追加情報**
+    message += `\n\n 📊 **戦況データ:**\n`;
+    message += `・総ID数: **${totalUniquePlayers}**\n　${armyNameA} : ${armyNameB} = ${uniquePlayersA} : ${uniquePlayersB}\n`;
+    message += `・総合計 **${totalActions}** レス（攻撃回数）\n　${armyNameA} : ${armyNameB} = ${totalActionsA} : ${totalActionsB}`;
+
+    
+    // ランキングを送信
+    await interaction.reply(message);
+  } catch (error) {
+    console.error('ランキング処理エラー:', error);
+    await interaction.reply('エラー: ランキングの取得に失敗しました');
+  }
+}
