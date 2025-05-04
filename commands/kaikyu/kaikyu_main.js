@@ -2,13 +2,13 @@ import { SlashCommandBuilder } from 'discord.js';
 import { GameState, User } from '../taisen/game.js';
 import { getArmyName } from './kaikyu.mjs';
 
-const ranks = ['二等兵＝', '一等兵〓', '軍曹¶', '曹長†', '大尉‡', '大佐▽', '准将◇', '大将Θ', '元帥☆'];
-const specialRank = '軍神Å';
+const ranks = ['二等兵🔸', '一等兵🔺', '軍曹🔶', '曹長♦️', '大尉⚡', '大佐💠', '准将🔆', '大将🔱', '元帥🎖️'];
+const specialRank = '軍神🌟';
 
 // 各階級ごとの大量撃破時の撃破数
 const largeKillCounts = {
-  '二等兵＝': 4, '一等兵〓': 5, '軍曹¶': 6, '曹長†': 7, '大尉‡': 8,
-  '大佐▽': 9, '准将◇': 10, '大将Θ': 11, '元帥☆': 12, '軍神Å': 16
+  '二等兵🔸': 4, '一等兵🔺': 5, '軍曹🔶': 6, '曹長♦️': 7, '大尉⚡': 8,
+  '大佐💠': 9, '准将🔆': 10, '大将🔱': 11, '元帥🎖️': 12, '軍神🌟': 16
 };
 
 // 超・大量撃破の撃破数（軍神のみ特別）
@@ -128,7 +128,11 @@ export async function kaikyu_main(interaction) {
     message += `-#  :military_helmet: ${UserArmyName} ${username} の攻撃！\n`;
     if(kills === 0){
       message += `## ざんねん、${kills} 撃破\n.\n`; //0撃破の場合
-    }else{
+    }else if(kills === 16){
+      message += `## 超・大量撃破！${kills} 撃破！\n.\n`; //16撃破の場合
+    }else if(kills === 32){
+      message += `## 超・超・大量撃破！${kills} 撃破！\n.\n`; //32撃破の場合
+    }else{   
       message += `## 命中！${kills} 撃破！\n.\n`; //1撃破以上の場合
     }
     
@@ -153,10 +157,73 @@ export async function kaikyu_main(interaction) {
      // メッセージ（ユーザーが入力したもの）
     if (customMessage) {
       message += ` \`\`\`${customMessage}\`\`\`\n`;
-    }   
-
-    
+    }      
     await interaction.reply(message);
+    
+    
+  // BOB支援制度の撃破処理を追加（ゲーム設定で有効になっている場合）
+    if (player.bobEnabled) {
+      const bobId = `bob-${userId}`;
+      const bobUser = await User.findOne({ where: { id: bobId } });
+      
+    if (bobUser) {
+      const bobRank = bobUser.rank;
+      const { newRank: bobNewRank, kills: bobKills, rankUp: bobRankUp } = processKill(bobRank);
+
+      // BOBのデータを更新
+      bobUser.rank = bobNewRank;
+      bobUser.total_kills += bobKills;
+      bobUser.gekiha_counts += 1;
+      await bobUser.save();
+
+      // BOBの所属軍にも撃破数を加算
+        if (bobUser.army === 'A') {
+          await gameState.increment("a_team_kills", { by: bobKills });
+        } else {
+          await gameState.increment("b_team_kills", { by: bobKills });
+        }
+
+      // フォローアップでBOBの戦果も通知
+      let bobMessage = `-#  **BOB支援制度**が発動！\n`;
+      // 絵文字を追加する（カスタム絵文字IDは Discord中で\:emoji:と打ち込めば返る
+      // 1350367513271341088 = 盾専
+      const emoji = "<:custom_emoji:1350367513271341088>";
+      bobMessage += `-# ${emoji} ${getArmyName(bobUser.army)} ${bobUser.username} の攻撃！\n`;
+
+      if (bobKills === 0) {
+        bobMessage += `### ざんねん、${bobKills} 撃破\n\n`;
+      }else if(bobKills === 16){
+        bobMessage += `### 超・大量撃破！${bobKills} 撃破！\n\n`; //16撃破の場合
+      }else if(bobKills === 32){
+        bobMessage += `### 超・超・大量撃破！${bobKills} 撃破！\n\n`; //32撃破の場合
+      }else{   
+        bobMessage += `### 命中！${bobKills} 撃破！\n\n`;
+      }
+      
+      if (bobRankUp) {
+        bobMessage += `## 🔥大量撃破だ！！🔥 \n **新階級: ${bobUser.rank}**へ昇格！\n\n`;
+      }
+
+      bobMessage += `-# >>> 🏅戦績（BOB）\n-# >>> ${getArmyName(bobUser.army)} ${bobUser.username} 階級: ${bobUser.rank} \n-# >>> 攻撃数: **${bobUser.gekiha_counts}**回 \n-# >>> 撃破数: **${bobUser.total_kills}** 撃破\n`;
+    // 軍の総撃破数を表示
+    // カウントダウンの場合は残存兵力を表示する
+    if (countMode === 'down') {
+      const gameState = await GameState.findOne({ where: { id: 1 } });
+      const remainingHP_A = gameState.initialArmyHP - totalKillsB;
+      const remainingHP_B = gameState.initialArmyHP - totalKillsA;
+      
+      message += `-# >>> :crossed_swords:  現在の戦況:\n-# >>> :yellow_circle: ${armyNameA} 残存兵力: ${remainingHP_A} \n-# >>> :green_circle: ${armyNameB} 残存兵力: ${remainingHP_B} \n`;
+
+    }else if (countMode === 'up') {    
+    
+      message += `-# >>> :crossed_swords:  現在の戦況:\n-# >>> :yellow_circle: ${armyNameA}: 　総${totalKillsA} 撃破\n-# >>> :green_circle: ${armyNameB}: 総${totalKillsB} 撃破\n`;
+      
+    }
+      await interaction.followUp(bobMessage);
+    }
+  }
+  
+  
   } catch (error) {
     console.error('撃破処理エラー1:', error);
     await interaction.reply('エラー1: 撃破処理に失敗しました');
