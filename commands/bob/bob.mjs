@@ -3,7 +3,7 @@ import { GameState, User } from '../taisen/game.js';
 
 export const data = new SlashCommandBuilder()
     .setName('bob')
-    .setDescription('BOB支援制度を有効/無効にします')
+    .setDescription('あなたの支援兵士BOBを有効/無効にします')
     .addStringOption(option =>
       option
         .setName('mode')
@@ -16,11 +16,35 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
+    const userId = interaction.user.id;
     const mode = interaction.options.getString('mode');
-    GameState.bobEnabled = mode === 'on';
-    await interaction.reply(
-      GameState.bobEnabled
-        ? '🟢 BOB支援制度を **有効** にしました。'
-        : '🔴 BOB支援制度を **無効** にしました。'
-    );
+    const user = await User.findOne({ where: { id: userId } });
+    // 絵文字を追加する（カスタム絵文字IDは Discord中で\:emoji:と打ち込めば返る
+    // 1350367513271341088 = 盾専
+    const emoji = "<:custom_emoji:1350367513271341088>";
+    
+    if (!user) {
+      return await interaction.reply('まず `/kaikyu` で所属軍を決めてからBOB支援制度を有効にしてください。');
+    }
+  
+    //個別IDごとにBOBをON/OFFする
+    if (mode === 'on') {
+      user.bobEnabled = true;
+      await user.save();
+      await interaction.reply(`${emoji}あなたのBOB支援制度を **有効化** しました！`);
+    } else if (mode === 'off') {
+      user.bobEnabled = false;
+      await user.save();
+      await interaction.reply('🔴あなたのBOB支援制度を **無効化** しました。');
+    } else {
+      await interaction.reply('モードは `on` か `off` を指定してください。');
+    }
   }
+
+//    GameState.bobEnabled = mode === 'on';
+//    await interaction.reply(
+//      GameState.bobEnabled
+//        ? `${emoji} 支援兵士BOBが大戦に **有効** しました。`
+//        : '🔴 BOB支援制度を **無効** にしました。'
+//    );
+//  }

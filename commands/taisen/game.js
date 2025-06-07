@@ -14,7 +14,7 @@ const User = sequelize.define('User', {
     primaryKey: true
   },
   // ユーザネームを保存
-  name: DataTypes.STRING,
+  username: DataTypes.STRING,
   // ユーザ所属軍を保存
   army: DataTypes.STRING,
   // ユーザ階級を保存（階級制で使用）
@@ -28,8 +28,38 @@ const User = sequelize.define('User', {
   total_kills: {
     type: DataTypes.INTEGER,
     defaultValue: 0
-  }
-
+  },
+ // BOBを使用するか
+  bobEnabled: {  
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  //属性コイン　火
+  fire_coin: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  //属性コイン　木
+  wood_coin: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  //属性コイン　土
+  earth_coin: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  //属性コイン　雷
+  thunder_coin: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  //属性コイン　水
+  water_coin: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
 });
 
 // ゲームの状態を格納する GamaState
@@ -47,18 +77,13 @@ const GameState = sequelize.define('GameState', {
   // 大戦の終戦方式を決定
   countMode: {  
     type: DataTypes.STRING,
-    defaultValue: 'up'
+    defaultValue: 'down'
   },    
   // 初期HPの決定（カウントダウン方式のみ）
   initialArmyHP: {  
     type: DataTypes.INTEGER,
     defaultValue: 100
   },
- // 初期HPの決定（カウントダウン方式のみ）
-  bobEnabled: {  
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  }, 
   // A軍の撃破数
   a_team_kills: { 
     type: DataTypes.INTEGER,
@@ -117,7 +142,7 @@ export async function checkShusen() {
 
 // テーブルの同期（テーブルが存在しない場合は作成されます）
 // 新しいコマンドを作成したときなど一度trueにしてからfalseにすると作成されエラーを回避できる
-sequelize.sync({ force: true  }) // force: false にすると、テーブルが存在していれば再作成されません
+sequelize.sync({ force: false  }) // force: false にすると、テーブルが存在していれば再作成されません
   .then(() => {
     console.log('✅ Models synced successfully.');
   })
