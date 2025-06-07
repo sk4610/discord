@@ -1,6 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { GameState, User } from '../taisen/game.js';
-import { getArmyName } from '../kaikyu/kaikyu.mjs';
 
 export const data = new SlashCommandBuilder()
   .setName('coin')
@@ -16,6 +15,11 @@ export const data = new SlashCommandBuilder()
         { name: '雷', value: 'thunder' },
         { name: '水', value: 'water' },
       )
+  )
+  .addStringOption(option =>
+    option.setName("message")
+      .setDescription("一言添える")
+      .setRequired(false)
   );
 
 export async function execute(interaction) {
@@ -25,8 +29,17 @@ export async function execute(interaction) {
   const player = await User.findOne({ where: { id: userId } });
   if (!player) return interaction.editReply('まず /kaikyu でチームに参加してください。');
 
-  const army = player.army; // 'A' または 'B'
-  const element = interaction.options.getString('element');
+  const army = player.army;
+  const column = interaction.options.getString('element');
+
+  const elementToColumn = {
+    fire: 'fire_coin',
+    wood: 'wood_coin',
+    earth: 'earth_coin',
+    thunder: 'thunder_coin',
+    water: 'water_coin',
+  };
+  const element = elementToColumn[column];
 
   const gameState = await GameState.findOne();
   if (gameState.rule_type !== 'coin') {
@@ -37,25 +50,28 @@ export async function execute(interaction) {
   let acquired = 0;
   const roll = Math.random();
   if (roll < 0.01) acquired = 5;
-  else if (roll < 0.90) acquired = 1;
+  else if (roll < 0.9) acquired = 1;
 
-  player[element] += acquired;
+  const before = player[element];
+  player[element] = before + acquired;
   await player.save();
 
+  const after = player[element];
   let message = `🎲 【${element}】コイン取得判定！\n`;
   message += acquired > 0
     ? `👉 ${element}属性コインを${acquired}枚獲得！\n`
     : '👉 残念！今回は獲得できませんでした。\n';
 
+  const amount = after;
+  
   // --- スキル発動チェック ---
-  if (acquired > 0 && player[element] % 5 === 0) {
+  if (acquired > 0 && after % 5 === 0 && after % 5 < acquired) {
     const enemyArmy = army === 'A' ? 'B' : 'A';
     const enemyUsers = await User.findAll({ where: { army: enemyArmy } });
 
     let damage = 0;
     let heal = 0;
     let eraseTarget = '';
-    const amount = player[element];
 
     switch (element) {
       case 'fire':
@@ -110,7 +126,7 @@ export async function execute(interaction) {
 
     if (eraseTarget) {
       for (const enemy of enemyUsers) {
-        enemy[eraseTarget] = 0;
+        enemy[`${eraseTarget}_coin`] = 0;
         await enemy.save();
       }
     }
@@ -131,10 +147,12 @@ export async function execute(interaction) {
     }
 
     message += `\n📊 ${army}軍の兵力：${myHP}\n`;
+    console.log(`[DEBUG] element: ${element}, after: ${after}, amount: ${amount}, damage: ${damage}`);
+
   } else {
     const myKills = army === 'A' ? gameState.a_team_kills : gameState.b_team_kills;
     const myHP = gameState.initialArmyHP - myKills;
-    message += `\n📊 ${army}軍の兵力：${myHP}\n${myKills}`;
+    message += `\n📊 ${army}軍の兵力：${myHP}\n`;
   }
 
   message += `🔥 火: ${player.fire_coin}枚 🌲 木: ${player.wood_coin}枚 🪨 土: ${player.earth_coin}枚 ⚡ 雷: ${player.thunder_coin}枚 💧 水: ${player.water_coin}枚`;
